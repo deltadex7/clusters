@@ -1,0 +1,33 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"raylib.h": "c",
+			"math.h": "c",
+			"blocks.h": "c",
+			"stdio.h": "c",
+			"*.m": "c",
+			"*.tcc": "cpp",
+			"chrono": "cpp",
+			"exception": "cpp",
+			"fstream": "cpp",
+			"istream": "cpp",
+			"mutex": "cpp",
+			"new": "cpp",
+			"ostream": "cpp",
+			"sstream": "cpp",
+			"stdexcept": "cpp",
+			"streambuf": "cpp",
+			"valarray": "cpp",
+			"__hash_table": "cpp",
+			"__locale": "cpp",
+			"iterator": "cpp",
+			"memory": "cpp",
+			"*.inc": "cpp"
+		}
+	}
+}
