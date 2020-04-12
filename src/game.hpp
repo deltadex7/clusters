@@ -4,6 +4,7 @@
 #include "raylib.h"
 
 #include "src/cluster.hpp"
+#include "src/filesystem.hpp"
 #include "src/generator.hpp"
 
 #include <stdlib.h>
@@ -16,9 +17,9 @@ class Game
     const int screenHeight = 360;
     const int targetFPS = 60;
     int blockSize = 16;
-    Cluster activeCluster;
-    //static Game *instance;
-    Generator pieceGenerator;
+    int matrixWidth = 10;
+    int matrixHeight = 20;
+    Filesystem matrix{matrixWidth, matrixHeight, blockSize};
     Game() {}
 
 public:

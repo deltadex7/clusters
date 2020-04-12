@@ -6,7 +6,7 @@ void Generator::GenerateClusterBag()
         clusterBag[i] = i;
 }
 
-ClusterUnit Generator::GetNextCluster()
+ClusterUnit Generator::GetNextClUnit()
 {
     if (piecesGenerated % 7 == 0)
     {

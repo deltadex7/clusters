@@ -358,7 +358,8 @@ SRC = $(call rwildcard, *.c, *.h, *.cpp, *.hpp)
 # OBJS += $(SRC:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
 # OBJS = $(patsubst $(SRC)/%.c, $(OBJ)/%.o, $(SOURCES))
 # OBJS += $(patsubst $(SRC)/%.cpp, $(OBJ)/%.o, $(SOURCES))
-OBJS = main.cpp $(SRC_DIR)/game.cpp $(SRC_DIR)/generator.cpp
+OBJS = main.cpp $(SRC_DIR)/game.cpp $(SRC_DIR)/generator.cpp $(SRC_DIR)/filesystem.cpp $(SRC_DIR)/cluster.cpp
+# OBJS = $(call rwildcard, *.c, *.cpp) 
 
 # For Android platform we call a custom Makefile.Android
 ifeq ($(PLATFORM),PLATFORM_ANDROID)

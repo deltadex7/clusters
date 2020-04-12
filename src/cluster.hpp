@@ -37,6 +37,32 @@ enum ClusterUnit
     I
 };
 
+enum ColorCodes
+{
+    // Clear color
+    COL_BLANK,
+    COL_RED,
+    COL_ORANGE,
+    COL_YELLOW,
+    COL_GREEN,
+    // Sky blue
+    COL_CYAN,
+    COL_BLUE,
+    COL_PURPLE,
+    COL_WHITE,
+    COL_GRAY,
+    // Light gray
+    COL_LIGHTGRAY,
+    // Dark gray
+    COL_DARKGRAY,
+    COL_BLACK,
+};
+
+// Helper function to retrieve raylib colors from
+// aforementioned ColorCodes
+Color ColorFromCode(ColorCodes code);
+
+#pragma region CLUSTER_DATA
 const int CLUSTER_T[CLSIZE][CLSIZE] = {{0, 0, 0, 0, 0},
                                        {0, 6, 1, 6, 0},
                                        {0, 1, 1, 1, 0},
@@ -78,12 +104,13 @@ const int CLUSTER_I[CLSIZE][CLSIZE] = {{0, 0, 0, 0, 0},
                                        {0, 1, 1, 1, 1},
                                        {0, 0, 4, 6, 0},
                                        {0, 0, 0, 0, 0}};
+#pragma endregion CLUSTER_DATA
 
 struct Cluster
 {
     ClusterUnit blockType;
-    int blockData[CLSIZE][CLSIZE];
-    Color color;
+    BlockState blockData[CLSIZE][CLSIZE];
+    ColorCodes color;
     RotationState orientation;
 
     Cluster() : Cluster(T) {}
@@ -104,36 +131,36 @@ struct Cluster
     void SetUnit(ClusterUnit type)
     {
         blockType = type;
-        orientation = ZERO;
+        orientation = RotationState::ZERO;
         switch (type)
         {
         case T:
             SetBlockData(CLUSTER_T);
-            color = PURPLE;
+            color = COL_PURPLE;
             break;
         case L:
             SetBlockData(CLUSTER_L);
-            color = ORANGE;
+            color = COL_ORANGE;
             break;
         case J:
             SetBlockData(CLUSTER_J);
-            color = BLUE;
+            color = COL_BLUE;
             break;
         case S:
             SetBlockData(CLUSTER_S);
-            color = GREEN;
+            color = COL_GREEN;
             break;
         case Z:
             SetBlockData(CLUSTER_Z);
-            color = RED;
+            color = COL_RED;
             break;
         case O:
             SetBlockData(CLUSTER_O);
-            color = YELLOW;
+            color = COL_YELLOW;
             break;
         case I:
             SetBlockData(CLUSTER_I);
-            color = SKYBLUE;
+            color = COL_CYAN;
         default:
             break;
         }
@@ -143,42 +170,14 @@ struct Cluster
     {
         for (int i = 0; i < CLSIZE; i++)
             for (int j = 0; j < CLSIZE; j++)
-                blockData[i][j] = data[i][j];
+                blockData[i][j] = (BlockState)(data[i][j]);
     }
 
-    void Rotate(RotationState targetRotation)
+    void SetBlockData(const BlockState data[CLSIZE][CLSIZE])
     {
-        //todo, watch OLC
-        orientation = (RotationState)((orientation + targetRotation) % 4);
-
-        int newState[5][5];
         for (int i = 0; i < CLSIZE; i++)
             for (int j = 0; j < CLSIZE; j++)
-            {
-                int x, y;
-                switch (targetRotation)
-                {
-                case RIGHT:
-                    x = i;
-                    y = CLSIZE - j - 1;
-                    break;
-                case DOUBLE:
-                    x = CLSIZE - j - 1;
-                    y = CLSIZE - i - 1;
-                    break;
-                case LEFT:
-                    x = CLSIZE - i - 1;
-                    y = j;
-                    break;
-                case ZERO:
-                default:
-                    y = i;
-                    break;
-                }
-                newState[i][j] = blockData[y][x];
-            }
-
-        SetBlockData(newState);
+                blockData[i][j] = data[i][j];
     }
 };
 
