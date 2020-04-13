@@ -7,8 +7,8 @@
 #include "src/filesystem.hpp"
 #include "src/generator.hpp"
 
-#include <stdlib.h>
-#include <time.h>
+#include <cstdlib>
+#include <ctime>
 
 class Game
 {

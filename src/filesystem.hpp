@@ -108,7 +108,7 @@ private:
 
     bool isInbound(int px, int py)
     {
-        return (0 < px && px < _width && py > 0);
+        return (0 <= px && px < _width && py >= 0);
     }
     bool isOccupied(int px, int py);
     bool isClusterValid(const BlockState blockData[CLSIZE][CLSIZE], int offsetX, int offsetY);
@@ -118,6 +118,11 @@ private:
     }
 
     int _blockSize;
+    int _shiftDelay = 12;
+    int _repeatDelay = 2;
+    int _lastPressed = 0;
+    int counter = _shiftDelay;
+    bool supercharge = false;
 
 public:
     // Currently active cluster

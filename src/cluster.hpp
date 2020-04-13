@@ -3,8 +3,7 @@
 
 #include "raylib.h"
 
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
 
 // Cluster size in squares
 #define CLSIZE (5)

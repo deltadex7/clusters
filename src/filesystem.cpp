@@ -1,4 +1,6 @@
 #include "src/filesystem.hpp"
+#include <cstdio>
+#include <cstring>
 
 Filesystem::Filesystem(int width, int height, int blockSize)
 {
@@ -122,20 +124,33 @@ bool Filesystem::isClusterValid(const BlockState blockData[CLSIZE][CLSIZE],
                                 int offsetX, int offsetY)
 
 {
+    // current piece at next x position
     int x = activeX - (CLSIZE / 2) + offsetX;
-    int y = activeY - (CLSIZE / 2) + offsetY;
+    // current piece at next y position
+    int y = activeY + (CLSIZE / 2) + offsetY;
     for (int i = 0; i < CLSIZE; ++i)
+    {
         for (int j = 0; j < CLSIZE; ++j)
-            if (isInbound(x, y) &&
-                isOccupied(x + j, y + i) &&
-                blockData[i][j] == BlockState::BLOCK)
+        {
+            // // First, check if the cluster is out of bounds
+            if (
+                blockData[i][j] == BlockState::BLOCK &&
+                (!isInbound(x + j, y - i) ||
+                 isOccupied(x + j, y - i)))
                 return false;
+            // 1. if the current piece is a block &&
+            // 2a. if the current piece at next position is out of bounds ||
+            // 2b. if the current piece at next position is already occupied
+        }
+    }
 
     return true;
 }
 
 void Filesystem::Update()
 {
+
+    // Handle rotations, only when pressed (not held)
     if (IsKeyPressed('R'))
         GetNextCluster();
     if (IsKeyPressed('F'))
@@ -145,10 +160,54 @@ void Filesystem::Update()
     if (IsKeyPressed('S'))
         RotateCluster(DOUBLE);
 
+    // Handle motion
     if (IsKeyPressed('J'))
+    {
         MoveCluster(-1, 0);
+        _lastPressed = 'J';
+        counter = _shiftDelay;
+    }
     if (IsKeyPressed('L'))
+    {
         MoveCluster(1, 0);
+        _lastPressed = 'L';
+        counter = _shiftDelay;
+    }
+
+    // Handle held keys
+    if (IsKeyDown('J') || IsKeyDown('L'))
+    {
+        if (counter <= 0)
+        {
+            counter += _repeatDelay;
+            if (_lastPressed == 'J')
+                MoveCluster(-1, 0);
+            else if (_lastPressed == 'L')
+                MoveCluster(1, 0);
+        }
+
+        if (IsKeyReleased('J'))
+        {
+            MoveCluster(1, 0);
+            _lastPressed = 'L';
+            counter = _shiftDelay;
+        }
+        else if (IsKeyReleased('L'))
+        {
+            MoveCluster(-1, 0);
+
+            _lastPressed = 'J';
+            counter = _shiftDelay;
+        }
+
+        counter--;
+    }
+    else
+    {
+        counter = _shiftDelay;
+    }
+
+    // Handle drop
     if (IsKeyPressed('K'))
         MoveCluster(0, -1);
 }
@@ -266,7 +325,7 @@ void Filesystem::Draw()
     int activeLeft = (activeX - CLSIZE / 2) * _blockSize;
     drawOrigin.x = (screenWidth / 2) - (_width * _blockSize / 2) + activeLeft;
     // Draw from top
-    int activeTop = (activeY - CLSIZE / 2) * _blockSize;
+    int activeTop = (activeY + CLSIZE / 2 + 1) * _blockSize;
     drawOrigin.y = (screenHeight / 2) + (_height * _blockSize / 2) - activeTop;
 
     originX = drawOrigin.x;
