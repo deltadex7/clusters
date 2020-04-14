@@ -165,21 +165,21 @@ void Filesystem::Update()
     {
         MoveCluster(-1, 0);
         _lastPressed = 'J';
-        counter = _shiftDelay;
+        _shiftCounter = _shiftDelay;
     }
     if (IsKeyPressed('L'))
     {
         MoveCluster(1, 0);
         _lastPressed = 'L';
-        counter = _shiftDelay;
+        _shiftCounter = _shiftDelay;
     }
 
     // Handle held keys
     if (IsKeyDown('J') || IsKeyDown('L'))
     {
-        if (counter <= 0)
+        if (_shiftCounter <= 0)
         {
-            counter += _repeatDelay;
+            _shiftCounter += _repeatDelay;
             if (_lastPressed == 'J')
                 MoveCluster(-1, 0);
             else if (_lastPressed == 'L')
@@ -190,26 +190,43 @@ void Filesystem::Update()
         {
             MoveCluster(1, 0);
             _lastPressed = 'L';
-            counter = _shiftDelay;
+            _shiftCounter = _shiftDelay;
         }
         else if (IsKeyReleased('L'))
         {
             MoveCluster(-1, 0);
 
             _lastPressed = 'J';
-            counter = _shiftDelay;
+            _shiftCounter = _shiftDelay;
         }
 
-        counter--;
+        _shiftCounter--;
     }
     else
     {
-        counter = _shiftDelay;
+        _shiftCounter = _shiftDelay;
     }
 
     // Handle drop
     if (IsKeyPressed('K'))
+    {
         MoveCluster(0, -1);
+    }
+
+    if (IsKeyDown('K'))
+    {
+        _dropCounter -= _dropSoftMult;
+    }
+    else
+    {
+        _dropCounter--;
+    }
+
+    while (_dropCounter <= 0)
+    {
+        MoveCluster(0, -1);
+        _dropCounter += _dropDelay;
+    }
 }
 
 // Draw the matrix filesystem.

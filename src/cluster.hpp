@@ -112,7 +112,7 @@ struct Cluster
     ColorCodes color;
     RotationState orientation;
 
-    Cluster() : Cluster(T) {}
+    Cluster() : Cluster(ClusterUnit::T) {}
 
     Cluster(ClusterUnit type)
     {

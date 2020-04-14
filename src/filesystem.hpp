@@ -106,23 +106,44 @@ private:
     // De-initialize the field
     void destroyField();
 
+    // Check if the given coordinate is within the bounds of
+    // the field.
     bool isInbound(int px, int py)
     {
         return (0 <= px && px < _width && py >= 0);
     }
+
+    // Check if the block in given coordinates exist.
     bool isOccupied(int px, int py);
+
+    // Check if the shape and move is possible at offset position
     bool isClusterValid(const BlockState blockData[CLSIZE][CLSIZE], int offsetX, int offsetY);
+
+    // Check if the shape and move is possible at zero offset
     bool isClusterValid(const BlockState blockData[CLSIZE][CLSIZE])
     {
         return isClusterValid(blockData, 0, 0);
     }
 
+    // Size of block to draw
     int _blockSize;
+    // Time in frames before autoshift begins
     int _shiftDelay = 12;
+    // Time in frames between autoshifts
     int _repeatDelay = 2;
+    // Last motion key pressed
     int _lastPressed = 0;
-    int counter = _shiftDelay;
-    bool supercharge = false;
+    // Autoshift clock/counter
+    int _shiftCounter = _shiftDelay;
+
+    // Time in frames to drop cluster by one row
+    int _dropDelay = 60;
+    // Soft drop speed multiplier
+    int _dropSoftMult = 20;
+    // Drop clock/counter
+    int _dropCounter = _dropDelay;
+    // // Is the piece being soft dropped?
+    // bool _softDropping = false;
 
 public:
     // Currently active cluster
@@ -145,6 +166,9 @@ public:
     // Moves the piece sideways, return condition
     // when motion is successful.
     bool MoveCluster(int deltaX, int deltaY);
+
+    // Lock the active cluster to the filesystem matrix.
+    void LockCluster();
 
     void Update();
     void Draw();
