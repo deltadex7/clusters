@@ -211,7 +211,7 @@ public:
 
     // Let the gravity move the piece. Return condition
     // when motion is successful.
-    bool GravityMoveCluster();
+    bool GravityMoveCluster(bool manual);
 
     // Lock the active cluster to the filesystem matrix.
     void LockCluster();

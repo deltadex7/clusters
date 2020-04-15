@@ -95,7 +95,7 @@ bool Filesystem::isClusterValid(const BlockState blockData[CLSIZE][CLSIZE],
 bool Filesystem::RotateCluster(RotationState targetRotation)
 {
     // Do not do any action during ARE.
-    if (_entryCounter > 0)
+    if (_entryCounter >= 0)
         return false;
 
     //todo, watch OLC
@@ -134,7 +134,7 @@ bool Filesystem::RotateCluster(RotationState targetRotation)
         activeCluster.orientation = targetState;
         activeCluster.SetBlockData(newState);
         _lockCounter = _lockDelay;
-        _hasLanded = isClusterValid(activeCluster.blockData, 0, -1);
+        _hasLanded = !isClusterValid(activeCluster.blockData, 0, -1);
         return true;
     }
     else
@@ -144,7 +144,7 @@ bool Filesystem::RotateCluster(RotationState targetRotation)
 bool Filesystem::MoveCluster(int deltaX, int deltaY)
 {
     // Do not do any action during ARE.
-    if (_entryCounter > 0)
+    if (_entryCounter >= 0)
         return false;
 
     if (isClusterValid(activeCluster.blockData, deltaX, deltaY))
@@ -152,16 +152,20 @@ bool Filesystem::MoveCluster(int deltaX, int deltaY)
         activeX += deltaX;
         activeY += deltaY;
         _lockCounter = _lockDelay;
-        _hasLanded = isClusterValid(activeCluster.blockData, 0, -1);
+        _hasLanded = !isClusterValid(activeCluster.blockData, 0, -1);
         return true;
     }
     else
         return false;
 }
 
-bool Filesystem::GravityMoveCluster()
+bool Filesystem::GravityMoveCluster(bool manual)
 {
     bool dropped = MoveCluster(0, -1);
+    // Reset gravity counter if done manually
+    if (manual)
+        _gravCounter = _gravDenom;
+
     if (dropped)
         return true;
     else
@@ -184,21 +188,8 @@ void Filesystem::SpawnNextCluster()
 void Filesystem::LockCluster()
 {
     // Do not do any action during ARE.
-    if (_entryCounter > 0)
+    if (_entryCounter >= 0)
         return;
-
-    // The distance from current position to the lowest level possible.
-    int lockDistance = 0;
-    // First, check if the cluster has not already landed.
-    if (!_hasLanded)
-    {
-        // Move the cluster down until it can't.
-        while (GravityMoveCluster())
-        {
-            // And if it can drop, increase this counter.
-            ++lockDistance;
-        }
-    }
 
     // Now copy the activeCluster.blockData into the _field
     // current piece at x position, start from left
@@ -217,11 +208,18 @@ void Filesystem::LockCluster()
     }
 
     // From here, assign the blockData into its respective x coords.
-    for (int j = CLSIZE - 1; j <= 0; j--)
+    for (int j = 0; j < CLSIZE; j++)
     {
-        for (int i = 0; i < x; i++)
+        // Only check if y is inbound, so x is hard-coded to be inbound
+        if (!isInbound(0, y + j))
+            continue;
+
+        for (int i = 0; i < CLSIZE; i++)
         {
-            BlockState dataToPush = activeCluster.blockData[j][i];
+            if (!isInbound(x + i, y + j))
+                continue;
+
+            BlockState dataToPush = activeCluster.blockData[CLSIZE - j - 1][i];
             if (dataToPush == BLOCK)
             {
                 rowIterator->SetElement(x + i, dataToPush, activeCluster.color);
@@ -300,28 +298,29 @@ void Filesystem::Update()
     // Handle drop
     if (IsKeyPressed('K'))
     {
-        if (GravityMoveCluster())
+        if (GravityMoveCluster(true))
         {
             // increment score by 1
         }
     }
 
-    // Check if the piece has landed
-    if (_hasLanded)
+    // Handle dropping
+    if (IsKeyDown('K'))
     {
-        // Handle dropping
-        if (IsKeyDown('K'))
-        {
-            _gravCounter -= _gravNum * _gravSoftMult;
-        }
-        else
-        {
-            _gravCounter -= _gravNum;
-        }
+        _gravCounter -= _gravNum * _gravSoftMult;
+    }
+    else
+    {
+        _gravCounter -= _gravNum;
+    }
+
+    // Check if the piece has landed
+    if (!_hasLanded)
+    {
 
         while (_gravCounter <= 0)
         {
-            if (GravityMoveCluster() && IsKeyDown('K'))
+            if (GravityMoveCluster(false) && IsKeyDown('K'))
             {
                 // increment score
             }
@@ -330,17 +329,29 @@ void Filesystem::Update()
     }
     else
     {
+
         // Handle locking
         if (_lockCounter <= 0)
-        {
             LockCluster();
-        }
-        _lockCounter--;
+        else
+            _lockCounter--;
     }
 
     if (IsKeyPressed(' '))
     {
-        LockCluster();
+        // The distance from current position to the lowest level possible.
+        int lockDistance = 0;
+        // First, check if the cluster has not already landed.
+        if (!_hasLanded)
+        {
+            // Move the cluster down until it can't.
+            while (GravityMoveCluster(false))
+            {
+                // And if it can drop, increase this counter.
+                ++lockDistance;
+            }
+        }
+        _lockCounter = 0;
     }
 
     // Handle held keys
