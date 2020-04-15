@@ -28,6 +28,8 @@ void Game::Draw()
 
     ClearBackground(BLACK);
 
+    DrawFPS(8, 8);
+
     // BeginMode3D(camera);
 
     // DrawCube(cubePosition, 2.0f, 2.0f, 2.0f, RED);

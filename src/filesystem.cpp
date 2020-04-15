@@ -10,7 +10,7 @@ Filesystem::Filesystem(int width, int height, int blockSize)
     _blockSize = blockSize;
     initField();
     fillQueue();
-    GetNextCluster();
+    SpawnNextCluster();
 }
 
 Filesystem::~Filesystem()
@@ -56,8 +56,48 @@ void Filesystem::destroyField()
     // delete[] _field;
 }
 
+bool Filesystem::isOccupied(int px, int py)
+{
+    auto iterator = _field.begin();
+    for (int i = 0; i < py; ++i)
+        iterator++;
+
+    return ((*iterator).GetElement(px).state == BlockState::BLOCK);
+}
+
+bool Filesystem::isClusterValid(const BlockState blockData[CLSIZE][CLSIZE],
+                                int offsetX, int offsetY)
+
+{
+    // current piece at next x position, start from left
+    int x = activeX - (CLSIZE / 2) + offsetX;
+    // current piece at next y position, start from top
+    int y = activeY + (CLSIZE / 2) + offsetY;
+    for (int i = 0; i < CLSIZE; ++i)
+    {
+        for (int j = 0; j < CLSIZE; ++j)
+        {
+            // // First, check if the cluster is out of bounds
+            if (
+                blockData[i][j] == BlockState::BLOCK &&
+                (!isInbound(x + j, y - i) ||
+                 isOccupied(x + j, y - i)))
+                return false;
+            // 1. if the current piece is a block &&
+            // 2a. if the current piece at next position is out of bounds ||
+            // 2b. if the current piece at next position is already occupied
+        }
+    }
+
+    return true;
+}
+
 bool Filesystem::RotateCluster(RotationState targetRotation)
 {
+    // Do not do any action during ARE.
+    if (_entryCounter > 0)
+        return false;
+
     //todo, watch OLC
     RotationState targetState =
         (RotationState)((activeCluster.orientation + targetRotation) % 4);
@@ -93,6 +133,8 @@ bool Filesystem::RotateCluster(RotationState targetRotation)
     {
         activeCluster.orientation = targetState;
         activeCluster.SetBlockData(newState);
+        _lockCounter = _lockDelay;
+        _hasLanded = isClusterValid(activeCluster.blockData, 0, -1);
         return true;
     }
     else
@@ -101,58 +143,139 @@ bool Filesystem::RotateCluster(RotationState targetRotation)
 
 bool Filesystem::MoveCluster(int deltaX, int deltaY)
 {
+    // Do not do any action during ARE.
+    if (_entryCounter > 0)
+        return false;
+
     if (isClusterValid(activeCluster.blockData, deltaX, deltaY))
     {
         activeX += deltaX;
         activeY += deltaY;
+        _lockCounter = _lockDelay;
+        _hasLanded = isClusterValid(activeCluster.blockData, 0, -1);
         return true;
     }
     else
         return false;
 }
 
-bool Filesystem::isOccupied(int px, int py)
+bool Filesystem::GravityMoveCluster()
 {
-    auto iterator = _field.begin();
-    for (int i = 0; i < py; ++i)
-        iterator++;
-
-    return ((*iterator).GetElement(px).state == BlockState::BLOCK);
+    bool dropped = MoveCluster(0, -1);
+    if (dropped)
+        return true;
+    else
+    {
+        _hasLanded = true;
+        return false;
+    }
 }
 
-bool Filesystem::isClusterValid(const BlockState blockData[CLSIZE][CLSIZE],
-                                int offsetX, int offsetY)
-
+void Filesystem::SpawnNextCluster()
 {
-    // current piece at next x position
-    int x = activeX - (CLSIZE / 2) + offsetX;
-    // current piece at next y position
-    int y = activeY + (CLSIZE / 2) + offsetY;
-    for (int i = 0; i < CLSIZE; ++i)
+    _gravCounter = _gravDenom;
+    _lockCounter = _lockDelay;
+    _hasLanded = false;
+    activeCluster = getNext();
+    activeX = _width / 2 + (_width & 1 ? 0 : -1);
+    activeY = _height - 2;
+}
+
+void Filesystem::LockCluster()
+{
+    // Do not do any action during ARE.
+    if (_entryCounter > 0)
+        return;
+
+    // The distance from current position to the lowest level possible.
+    int lockDistance = 0;
+    // First, check if the cluster has not already landed.
+    if (!_hasLanded)
     {
-        for (int j = 0; j < CLSIZE; ++j)
+        // Move the cluster down until it can't.
+        while (GravityMoveCluster())
         {
-            // // First, check if the cluster is out of bounds
-            if (
-                blockData[i][j] == BlockState::BLOCK &&
-                (!isInbound(x + j, y - i) ||
-                 isOccupied(x + j, y - i)))
-                return false;
-            // 1. if the current piece is a block &&
-            // 2a. if the current piece at next position is out of bounds ||
-            // 2b. if the current piece at next position is already occupied
+            // And if it can drop, increase this counter.
+            ++lockDistance;
         }
     }
 
-    return true;
+    // Now copy the activeCluster.blockData into the _field
+    // current piece at x position, start from left
+    int x = activeX - (CLSIZE / 2);
+    // current piece at y position, start from bottom
+    int y = activeY - (CLSIZE / 2);
+
+    // Field row iterator, points to current row
+    auto rowIterator = _field.begin();
+
+    // Initial position is zero, so increment iterator
+    // to reach desired row. If y = 5, then increment 5x.
+    for (int i = 0; i < y; i++)
+    {
+        rowIterator++;
+    }
+
+    // From here, assign the blockData into its respective x coords.
+    for (int j = CLSIZE - 1; j <= 0; j--)
+    {
+        for (int i = 0; i < x; i++)
+        {
+            BlockState dataToPush = activeCluster.blockData[j][i];
+            if (dataToPush == BLOCK)
+            {
+                rowIterator->SetElement(x + i, dataToPush, activeCluster.color);
+            }
+        }
+        rowIterator++;
+    }
+
+    // Piece has locked, set a delay before the next piece spawns.
+    _entryCounter = _entryDelay;
 }
 
 void Filesystem::Update()
 {
 
     // Handle rotations, only when pressed (not held)
-    if (IsKeyPressed('R'))
-        GetNextCluster();
+    // if (IsKeyPressed('A'))
+    //     SpawnNextCluster();
+    // Handle entry delay
+    if (_entryCounter > 0)
+    {
+        // Cluster hasn't spawned, decrement counter
+        _entryCounter--;
+    }
+    else
+    {
+        if (_entryCounter == 0)
+        {
+            SpawnNextCluster();
+            _entryCounter--;
+
+            // Handle initial hold.
+            // Also known as Initial Hold System (IHS),
+            // Pioneered by Arika in TGM3.
+
+            // Handle initial rotations.
+            // Also known as Initial Rotation System (IRS),
+            // Pioneered by Arika and the #TGM_series.
+            if (IsKeyDown('F'))
+                RotateCluster(RIGHT);
+            if (IsKeyDown('D'))
+                RotateCluster(LEFT);
+            if (IsKeyDown('S'))
+                RotateCluster(DOUBLE);
+
+            // If rotation fails, no initial rotation done.
+            // It is already by design.
+            // Note that kicks may be performed during IRS.
+        }
+    }
+
+    // Handle Instantaneous actions
+    // 1. Handle hold
+    // 2. Handle rotations
     if (IsKeyPressed('F'))
         RotateCluster(RIGHT);
     if (IsKeyPressed('D'))
@@ -160,7 +283,7 @@ void Filesystem::Update()
     if (IsKeyPressed('S'))
         RotateCluster(DOUBLE);
 
-    // Handle motion
+    // 3. Handle motion
     if (IsKeyPressed('J'))
     {
         MoveCluster(-1, 0);
@@ -172,6 +295,52 @@ void Filesystem::Update()
         MoveCluster(1, 0);
         _lastPressed = 'L';
         _shiftCounter = _shiftDelay;
+    }
+
+    // Handle drop
+    if (IsKeyPressed('K'))
+    {
+        if (GravityMoveCluster())
+        {
+            // increment score by 1
+        }
+    }
+
+    // Check if the piece has landed
+    if (_hasLanded)
+    {
+        // Handle dropping
+        if (IsKeyDown('K'))
+        {
+            _gravCounter -= _gravNum * _gravSoftMult;
+        }
+        else
+        {
+            _gravCounter -= _gravNum;
+        }
+
+        while (_gravCounter <= 0)
+        {
+            if (GravityMoveCluster() && IsKeyDown('K'))
+            {
+                // increment score
+            }
+            _gravCounter += _gravDenom;
+        }
+    }
+    else
+    {
+        // Handle locking
+        if (_lockCounter <= 0)
+        {
+            LockCluster();
+        }
+        _lockCounter--;
+    }
+
+    if (IsKeyPressed(' '))
+    {
+        LockCluster();
     }
 
     // Handle held keys
@@ -206,27 +375,6 @@ void Filesystem::Update()
     {
         _shiftCounter = _shiftDelay;
     }
-
-    // Handle drop
-    if (IsKeyPressed('K'))
-    {
-        MoveCluster(0, -1);
-    }
-
-    if (IsKeyDown('K'))
-    {
-        _dropCounter -= _dropSoftMult;
-    }
-    else
-    {
-        _dropCounter--;
-    }
-
-    while (_dropCounter <= 0)
-    {
-        MoveCluster(0, -1);
-        _dropCounter += _dropDelay;
-    }
 }
 
 // Draw the matrix filesystem.
@@ -236,55 +384,57 @@ void Filesystem::Draw()
     int screenWidth = GetScreenWidth();
     int screenHeight = GetScreenHeight();
 
-    char piceText[3];
-    switch (activeCluster.blockType)
+    char piceText;
+    switch (_clusterQueue.front().blockType)
     {
     case T:
-        strcpy(piceText, "T");
+        piceText = 'T';
         break;
     case L:
-        strcpy(piceText, "L");
+        piceText = 'L';
         break;
     case J:
-        strcpy(piceText, "J");
+        piceText = 'J';
         break;
     case S:
-        strcpy(piceText, "S");
+        piceText = 'S';
         break;
     case Z:
-        strcpy(piceText, "Z");
+        piceText = 'Z';
         break;
     case O:
-        strcpy(piceText, "O");
+        piceText = 'O';
         break;
     case I:
-        strcpy(piceText, "I");
+        piceText = 'I';
         break;
     default:
         break;
     }
 
-    switch (activeCluster.orientation)
-    {
-    case ZERO:
-        strcat(piceText, "0");
-        break;
-    case RIGHT:
-        strcat(piceText, "R");
-        break;
-    case LEFT:
-        strcat(piceText, "L");
-        break;
-    case DOUBLE:
-        strcat(piceText, "2");
+    // switch (activeCluster.orientation)
+    // {
+    // case ZERO:
+    //     strcat(piceText, "0");
+    //     break;
+    // case RIGHT:
+    //     strcat(piceText, "R");
+    //     break;
+    // case LEFT:
+    //     strcat(piceText, "L");
+    //     break;
+    // case DOUBLE:
+    //     strcat(piceText, "2");
 
-    default:
-        break;
-    }
+    // default:
+    //     break;
+    // }
 
-    DrawText(piceText, 10, 40, 20, LIGHTGRAY);
+    char debugData[20];
 
-    DrawFPS(10, 10);
+    sprintf(debugData, "%c %d %d %d %d", piceText, _gravCounter, _lockCounter, _shiftCounter, _entryCounter);
+
+    DrawText(debugData, 10, 40, 20, LIGHTGRAY);
 
     // Helper variable to draw
     Vector2 drawOrigin;
@@ -361,4 +511,29 @@ void Filesystem::Draw()
         drawOrigin.x = originX;
         drawOrigin.y += _blockSize;
     }
+
+    // // Draw next piece
+    // // Draw from left
+    // int nextLeft = (activeX - CLSIZE / 2) * _blockSize;
+    // drawOrigin.x = (screenWidth / 2) - (_width * _blockSize / 2) + nextLeft;
+    // // Draw from top
+    // int activeTop = (activeY + CLSIZE / 2 + 1) * _blockSize;
+    // drawOrigin.y = (screenHeight / 2) - (_height * _blockSize / 2) - activeTop;
+
+    // originX = drawOrigin.x;
+
+    // for (int i = 0; i < CLSIZE; i++)
+    // {
+    //     for (int j = 0; j < CLSIZE; j++)
+    //     {
+    //         if (_clusterQueue.front() & BLOCK)
+    //         {
+    //             DrawRectangle(drawOrigin.x, drawOrigin.y, _blockSize, _blockSize, ColorFromCode(activeCluster.color));
+    //         }
+    //         drawOrigin.x += _blockSize;
+    //     }
+
+    //     drawOrigin.x = originX;
+    //     drawOrigin.y += _blockSize;
+    // }
 }

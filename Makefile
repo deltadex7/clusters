@@ -24,7 +24,7 @@
 .PHONY: all clean
 
 # Define required raylib variables
-PROJECT_NAME       ?= main
+PROJECT_NAME       ?= clusters
 RAYLIB_VERSION     ?= 2.5.0
 RAYLIB_API_VERSION ?= 251
 RAYLIB_PATH        ?= ..\..

@@ -119,7 +119,7 @@ struct Cluster
         SetUnit(type);
     }
 
-    Cluster(Cluster &other)
+    Cluster(const Cluster &other)
     {
         SetBlockData(other.blockData);
         blockType = other.blockType;

@@ -13,6 +13,15 @@ struct Block
 {
     BlockState state;
     ColorCodes color;
+
+    Block() : state(BlockState::NONE), color(COL_BLANK) {}
+    Block(BlockState st, ColorCodes cl) : state(st), color(cl) {}
+
+    Block(const Block &bl)
+    {
+        state = bl.state;
+        color = bl.color;
+    }
 };
 
 class BlockRow
@@ -50,10 +59,29 @@ public:
         }
     }
 
-    Block GetElement(int index)
+    Block &GetElement(int index)
     {
         return _elements[index];
     }
+
+    // void SetElement(int index, Block &block)
+    // {
+    //     _elements[index] = block;
+    // }
+
+    void SetElement(int index, BlockState st, ColorCodes cl)
+    {
+        _elements[index].state = st;
+        _elements[index].color = cl;
+    }
+};
+
+enum SystemStatus
+{
+    ACTIVE,
+    INACTIVE,
+    DEADLOCK,
+    OVERFLOWN
 };
 
 class Filesystem
@@ -62,7 +90,7 @@ private:
     // Cluster generator using 7-piece bag system
     Generator _clusterGen;
     // Incoming cluster units
-    std::queue<ClusterUnit> _clusterQueue;
+    std::queue<Cluster> _clusterQueue;
     // Cluster queue size
     short _queueSize = 5;
 
@@ -77,9 +105,9 @@ private:
 
     // Get the next cluster unit, pop one from the queue,
     // and refill the queue.
-    ClusterUnit getNext()
+    Cluster getNext()
     {
-        ClusterUnit value = _clusterQueue.front();
+        Cluster value = _clusterQueue.front();
         _clusterQueue.pop();
         fillQueue();
         return value;
@@ -127,45 +155,63 @@ private:
 
     // Size of block to draw
     int _blockSize;
-    // Time in frames before autoshift begins
+    // Time in frames before autoshift begins.
+    // Also known as Delayed Auto Shift (DAS)
     int _shiftDelay = 12;
-    // Time in frames between autoshifts
+    // Time in frames between autoshifts.
+    // Also known as Auto Repeat Rate (ARR)
     int _repeatDelay = 2;
     // Last motion key pressed
     int _lastPressed = 0;
     // Autoshift clock/counter
     int _shiftCounter = _shiftDelay;
 
-    // Time in frames to drop cluster by one row
-    int _dropDelay = 60;
+    // Gravity numerator value
+    int _gravNum = 5;
+    // Gravity denominator value
+    int _gravDenom = 300;
     // Soft drop speed multiplier
-    int _dropSoftMult = 20;
+    int _gravSoftMult = 20;
     // Drop clock/counter
-    int _dropCounter = _dropDelay;
+    int _gravCounter = _gravDenom;
     // // Is the piece being soft dropped?
     // bool _softDropping = false;
 
+    // Conditional variable if the piece has landed
+    bool _hasLanded = false;
+    // Time in frames to lock current cluster
+    int _lockDelay = 60;
+    // Lock delay clock/counter
+    int _lockCounter = _lockDelay;
+
+    // Wait time before the next cluster spawns.
+    // Also known as ARE (a Japanese word for ???)
+    int _entryDelay = 60;
+    // Entry delay clock/counter. -1 means cluster has spawned.
+    int _entryCounter = -1;
+
 public:
+    //  Filesystem active status
+
     // Currently active cluster
     Cluster activeCluster;
     // Initialize filesystem matrix with size parameters
     Filesystem(int width, int height, int blockSize);
     ~Filesystem();
 
-    void GetNextCluster()
-    {
-        activeCluster.SetUnit(getNext());
-        activeX = _width / 2 + (_width & 1 ? -1 : 0);
-        activeY = _height - 2;
-    }
+    void SpawnNextCluster();
 
-    // Rotates the piece into targetRot, return condition
+    // Rotates the piece into targetRot. Return condition
     // when rotation is successful.
     bool RotateCluster(RotationState targetRot);
 
-    // Moves the piece sideways, return condition
+    // Moves the piece sideways. Return condition
     // when motion is successful.
     bool MoveCluster(int deltaX, int deltaY);
+
+    // Let the gravity move the piece. Return condition
+    // when motion is successful.
+    bool GravityMoveCluster();
 
     // Lock the active cluster to the filesystem matrix.
     void LockCluster();
