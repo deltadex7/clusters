@@ -6,8 +6,10 @@
 // #include "src/game.hpp"
 #include "src/generator.hpp"
 
+#include <algorithm>
 #include <list>
 #include <queue>
+#include <vector>
 
 struct Block
 {
@@ -26,16 +28,22 @@ struct Block
 
 class BlockRow
 {
-    Block *_elements;
+    std::vector<Block> _elements;
     int _size;
-    bool toClear = false;
 
 public:
-    BlockRow(int size)
+    bool toClear = false;
+    auto begin()
     {
-        _size = size;
-        _elements = new Block[size];
+        return _elements.begin();
     }
+
+    auto end()
+    {
+        return _elements.end();
+    }
+
+    BlockRow(int size) : _size(size), _elements(size) {}
 
     ~BlockRow()
     {
@@ -44,19 +52,17 @@ public:
 
     void ClearRow()
     {
-        for (int i = 0; i < _size; i++)
+        for (auto &&el : _elements)
         {
-            _elements[i].state = BlockState::NONE;
-            _elements[i].color = COL_BLANK;
+            el.state = BlockState::NONE;
+            el.color = COL_BLANK;
         }
     }
 
     void DeleteRow()
     {
-        for (int i = 0; i < _size; i++)
-        {
-            _elements[i].state = BlockState::DESTROY;
-        }
+        for (auto &&el : _elements)
+            el.state = BlockState::DESTROY;
     }
 
     Block &GetElement(int index)
@@ -73,6 +79,23 @@ public:
     {
         _elements[index].state = st;
         _elements[index].color = cl;
+    }
+
+    // Check if the row is full and tag the row and the blocks
+    // for removal if it is.
+    bool isFull()
+    {
+        toClear = std::all_of(_elements.begin(), _elements.end(),
+                              [](const Block &el) {
+                                  return el.state == BLOCK;
+                              });
+
+        if (toClear)
+            std::for_each(_elements.begin(), _elements.end(),
+                          [](Block &el) {
+                              el.state = DESTROY;
+                          });
+        return toClear;
     }
 };
 
@@ -124,15 +147,20 @@ private:
     // Width (column count) of field
     int _width;
     // Height (row count) of field
-    int _height;
+    size_t _height;
     // Maximum height of field to accomodate overflows
-    int _maxHeight;
+    size_t _maxHeight;
     // Initialize the field
     void initField();
     // Clear the field
     void clearField();
-    // De-initialize the field
+    // De-initialize the field.
     void destroyField();
+    // Tag filled row to be deleted. Used for animation.
+    // Returns true if any row is tagged.
+    bool tagFieldRow();
+    // Delete the tagged filled row.
+    void eraseTaggedFieldRows();
 
     // Check if the given coordinate is within the bounds of
     // the field.
@@ -180,14 +208,20 @@ private:
     // Conditional variable if the piece has landed
     bool _hasLanded = false;
     // Time in frames to lock current cluster
-    int _lockDelay = 60;
+    int _lockDelay = 30;
     // Lock delay clock/counter
     int _lockCounter = _lockDelay;
 
+    // Time before the row is erased
+    int _eraseDelay = 30;
+    // Erase delay clock/counter. -1 means no rows to erase.
+    int _eraseCounter = -1;
+
     // Wait time before the next cluster spawns.
     // Also known as ARE (a Japanese word for ???)
-    int _entryDelay = 60;
+    int _entryDelay = 30;
     // Entry delay clock/counter. -1 means cluster has spawned.
+    // Can be combined with erase delay.
     int _entryCounter = -1;
 
 public:

@@ -107,6 +107,7 @@ const int CLUSTER_I[CLSIZE][CLSIZE] = {{0, 0, 0, 0, 0},
 
 struct Cluster
 {
+    bool active = true;
     ClusterUnit blockType;
     BlockState blockData[CLSIZE][CLSIZE];
     ColorCodes color;

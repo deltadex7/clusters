@@ -24,9 +24,9 @@ void Filesystem::initField()
 
     // for (int i = 0; i < _height; i++)
     //     _field[i] = new Block[_width];
-    for (int i = 0; i < _maxHeight; i++)
+    for (size_t i = 0; i < _maxHeight; i++)
     {
-        _field.push_back(BlockRow(_width));
+        _field.push_back(_width);
     }
 
     clearField();
@@ -134,7 +134,10 @@ bool Filesystem::RotateCluster(RotationState targetRotation)
         activeCluster.orientation = targetState;
         activeCluster.SetBlockData(newState);
         _lockCounter = _lockDelay;
+
         _hasLanded = !isClusterValid(activeCluster.blockData, 0, -1);
+        if (_hasLanded)
+            _gravCounter = _gravDenom;
         return true;
     }
     else
@@ -153,6 +156,8 @@ bool Filesystem::MoveCluster(int deltaX, int deltaY)
         activeY += deltaY;
         _lockCounter = _lockDelay;
         _hasLanded = !isClusterValid(activeCluster.blockData, 0, -1);
+        if (_hasLanded)
+            _gravCounter = _gravDenom;
         return true;
     }
     else
@@ -228,47 +233,88 @@ void Filesystem::LockCluster()
         rowIterator++;
     }
 
+    activeCluster.active = false;
+
+    // Check the entire board if row is filled.
+    bool canErase = tagFieldRow();
+
     // Piece has locked, set a delay before the next piece spawns.
-    _entryCounter = _entryDelay;
+    // If a row can be erased, add erase delay to counter.
+    _entryCounter = _entryDelay + ((canErase) ? _eraseDelay : 0);
+    _eraseCounter = (canErase) ? _eraseDelay : -1;
+}
+
+bool Filesystem::tagFieldRow()
+{
+    bool canErase = false;
+    // Iterate from bottom to top
+    for (auto rowIt = _field.begin(); rowIt != _field.end(); rowIt++)
+        canErase |= rowIt->isFull();
+
+    return canErase;
+}
+
+void Filesystem::eraseTaggedFieldRows()
+{
+    _field.remove_if([](const BlockRow &row) {
+        return row.toClear;
+    });
+
+    // refill the rows
+    while (_field.size() < _maxHeight)
+    {
+        _field.push_back(_width);
+    }
+
+    // auto row = _field.begin();
+    // while (row != _field.end())
+    // {
+    //     if (row->toClear)
+    //         row = _field.erase(row);
+    //     else
+    //         row++;
+    // }
 }
 
 void Filesystem::Update()
 {
 
-    // Handle rotations, only when pressed (not held)
-    // if (IsKeyPressed('A'))
-    //     SpawnNextCluster();
+    if (_eraseCounter > 0)
+        _eraseCounter--;
+    else if (_eraseCounter == 0)
+    {
+        eraseTaggedFieldRows();
+        _eraseCounter--;
+    }
+
     // Handle entry delay
     if (_entryCounter > 0)
     {
         // Cluster hasn't spawned, decrement counter
         _entryCounter--;
     }
-    else
+    else if (_entryCounter == 0)
     {
-        if (_entryCounter == 0)
-        {
-            SpawnNextCluster();
-            _entryCounter--;
+        SpawnNextCluster();
+        _entryCounter--;
 
-            // Handle initial hold.
-            // Also known as Initial Hold System (IHS),
-            // Pioneered by Arika in TGM3.
+        // Handle initial hold.
+        // Also known as Initial Hold System (IHS),
+        // Pioneered by Arika in TGM3.
 
-            // Handle initial rotations.
-            // Also known as Initial Rotation System (IRS),
-            // Pioneered by Arika and the #TGM_series.
-            if (IsKeyDown('F'))
-                RotateCluster(RIGHT);
-            if (IsKeyDown('D'))
-                RotateCluster(LEFT);
-            if (IsKeyDown('S'))
-                RotateCluster(DOUBLE);
+        // Handle initial rotations.
+        // Also known as Initial Rotation System (IRS),
+        // Pioneered by Arika and the #TGM_series.
+        if (IsKeyDown('F'))
+            RotateCluster(RIGHT);
+        if (IsKeyDown('D'))
+            RotateCluster(LEFT);
+        if (IsKeyDown('S'))
+            RotateCluster(DOUBLE);
 
-            // If rotation fails, no initial rotation done.
-            // It is already by design.
-            // Note that kicks may be performed during IRS.
-        }
+        // If rotation fails, no initial rotation done.
+        // It is already by design.
+        // Note that kicks may be performed during IRS.
     }
 
     // Handle Instantaneous actions
@@ -304,27 +350,26 @@ void Filesystem::Update()
         }
     }
 
-    // Handle dropping
-    if (IsKeyDown('K'))
-    {
-        _gravCounter -= _gravNum * _gravSoftMult;
-    }
-    else
-    {
-        _gravCounter -= _gravNum;
-    }
-
     // Check if the piece has landed
     if (!_hasLanded)
     {
-
+        // Handle dropping
+        if (IsKeyDown('K'))
+        {
+            _gravCounter -= _gravNum * _gravSoftMult;
+        }
+        else
+        {
+            _gravCounter -= _gravNum;
+        }
         while (_gravCounter <= 0)
         {
             if (GravityMoveCluster(false) && IsKeyDown('K'))
             {
                 // increment score
             }
-            _gravCounter += _gravDenom;
+            if (!_hasLanded)
+                _gravCounter += _gravDenom;
         }
     }
     else
@@ -357,14 +402,20 @@ void Filesystem::Update()
     // Handle held keys
     if (IsKeyDown('J') || IsKeyDown('L'))
     {
-        if (_shiftCounter <= 0)
+        while (_shiftCounter <= 0)
         {
+            bool canMove = false;
             _shiftCounter += _repeatDelay;
             if (_lastPressed == 'J')
-                MoveCluster(-1, 0);
+                canMove = MoveCluster(-1, 0);
             else if (_lastPressed == 'L')
-                MoveCluster(1, 0);
+                canMove = MoveCluster(1, 0);
+
+            if (!canMove)
+                break;
         }
+        if (_shiftCounter > 0)
+            _shiftCounter--;
 
         if (IsKeyReleased('J'))
         {
@@ -379,11 +430,10 @@ void Filesystem::Update()
             _lastPressed = 'J';
             _shiftCounter = _shiftDelay;
         }
-
-        _shiftCounter--;
     }
     else
     {
+        // reset DAS
         _shiftCounter = _shiftDelay;
     }
 }
@@ -441,9 +491,9 @@ void Filesystem::Draw()
     //     break;
     // }
 
-    char debugData[20];
+    char debugData[32];
 
-    sprintf(debugData, "%c %d %d %d %d", piceText, _gravCounter, _lockCounter, _shiftCounter, _entryCounter);
+    sprintf(debugData, "%c %d %d %d\n%d %d", piceText, _gravCounter, _lockCounter, _shiftCounter, _entryCounter, _eraseCounter);
 
     DrawText(debugData, 10, 40, 20, LIGHTGRAY);
 
@@ -462,18 +512,16 @@ void Filesystem::Draw()
     originX = drawOrigin.x;
 
     // Row iterator
-    auto fieldRow = _field.begin();
-    for (int i = 0; i < _height; i++)
-    {
-        for (int j = 0; j < _width; j++)
-        {
-            Block cell = (*fieldRow).GetElement(j);
-            switch (cell.state)
-            {
 
+    for (auto row = _field.begin(); row != _field.end(); row++)
+    {
+        for (auto cell = row->begin(); cell != row->end(); cell++)
+        {
+            switch (cell->state)
+            {
             case BlockState::BLOCK:
                 // Draw rectangle from top left
-                DrawRectangle(drawOrigin.x, drawOrigin.y - _blockSize, _blockSize, _blockSize, ColorFromCode(cell.color));
+                DrawRectangle(drawOrigin.x, drawOrigin.y - _blockSize, _blockSize, _blockSize, ColorFromCode(cell->color));
                 break;
             case BlockState::DESTROY:
                 // Draw rectangle from top left
@@ -495,32 +543,34 @@ void Filesystem::Draw()
         }
         drawOrigin.x = originX;
         drawOrigin.y -= _blockSize;
-        fieldRow++;
     }
 
-    // Draw current piece
-    // Draw from left
-    int activeLeft = (activeX - CLSIZE / 2) * _blockSize;
-    drawOrigin.x = (screenWidth / 2) - (_width * _blockSize / 2) + activeLeft;
-    // Draw from top
-    int activeTop = (activeY + CLSIZE / 2 + 1) * _blockSize;
-    drawOrigin.y = (screenHeight / 2) + (_height * _blockSize / 2) - activeTop;
-
-    originX = drawOrigin.x;
-
-    for (int i = 0; i < CLSIZE; i++)
+    // Draw current piece if active
+    if (activeCluster.active)
     {
-        for (int j = 0; j < CLSIZE; j++)
-        {
-            if (activeCluster.blockData[i][j] & BLOCK)
-            {
-                DrawRectangle(drawOrigin.x, drawOrigin.y, _blockSize, _blockSize, ColorFromCode(activeCluster.color));
-            }
-            drawOrigin.x += _blockSize;
-        }
+        // Draw from left
+        int activeLeft = (activeX - CLSIZE / 2) * _blockSize;
+        drawOrigin.x = (screenWidth / 2) - (_width * _blockSize / 2) + activeLeft;
+        // Draw from top
+        int activeTop = (activeY + CLSIZE / 2 + 1) * _blockSize;
+        drawOrigin.y = (screenHeight / 2) + (_height * _blockSize / 2) - activeTop;
 
-        drawOrigin.x = originX;
-        drawOrigin.y += _blockSize;
+        originX = drawOrigin.x;
+
+        for (int i = 0; i < CLSIZE; i++)
+        {
+            for (int j = 0; j < CLSIZE; j++)
+            {
+                if (activeCluster.blockData[i][j] & BLOCK)
+                {
+                    DrawRectangle(drawOrigin.x, drawOrigin.y, _blockSize, _blockSize, ColorFromCode(activeCluster.color));
+                }
+                drawOrigin.x += _blockSize;
+            }
+
+            drawOrigin.x = originX;
+            drawOrigin.y += _blockSize;
+        }
     }
 
     // // Draw next piece
